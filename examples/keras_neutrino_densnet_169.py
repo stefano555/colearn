@@ -15,10 +15,26 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
+####check memory usage
+
+from guppy import hpy
+
+heap = hpy()
+
+print("Heap Status At Starting : ")
+heap_status1 = heap.heap()
+print("Heap Size : ", heap_status1.size, " bytes\n")
+print(heap_status1)
+
+
 import os
 
 import tensorflow as tf
 import tensorflow_datasets as tfds
+
+#print(tf.config.experimental.get_memory_growth('CPU'))
+#print(tf.config.experimental.get_memory_info('CPU'))
+
 
 from colearn.training import initial_result, collective_learning_round, set_equal_weights
 from colearn.utils.plot import ColearnPlot
@@ -42,6 +58,9 @@ from tensorflow.keras.layers import Dense, Dropout, Flatten, Activation, Conv2D,
 from tensorflow.keras.models import Model, Sequential, model_from_json
 from tensorflow.keras.optimizers import SGD, Adam
 
+
+print(tf.__version__)
+
 """
 MNIST training example using Keras
 
@@ -55,7 +74,7 @@ What script does:
 - Does multiple rounds of learning process and displays plot with results
 """
 
-n_learners = 3
+n_learners = 2
 vote_threshold = 0.5
 vote_batches = 2
 
@@ -65,7 +84,7 @@ width = 28
 height = 28
 n_classes = 10
 l_rate = 0.001
-batch_size = 64
+batch_size = 8
 
 # Load data for each learner
 #train_dataset, info = tfds.load('mnist', split='train', as_supervised=True, with_info=True)
@@ -407,10 +426,10 @@ y_test_bin = to_categorical(y_test,3)
 
 print(y_train_bin)
 
-#y_train=None
-#del y_train
-#y_test=None
-#del y_test
+y_train=None
+del y_train
+y_test=None
+del y_test
 
 print('y_train_bin.shape',y_train_bin.shape)
 print('y_test_bin.shape',y_test_bin.shape)
@@ -463,24 +482,77 @@ print("x_train[0].shape[0]", x_train[0].shape[0])
 print("x_train[0].shape[1]", x_train[0].shape[1])
 print("x_train[0].shape[2]", x_train[0].shape[2])
 
+x_train_temp = None
+del x_train_temp
+x_test_temp = None
+del x_test_temp
+
+####I shuffle the dataset and divide into three subsets
+###all subsets will have 5000 images, but I will reshuffle the set at each round to ensure each subset is different
+
+from sklearn.utils import shuffle
+n_pics_subset=1000
+
+x_train_sub_list = []
+y_train_sub_list = []
+###for some absurde reason it works only with two subsets and breaks with 3, no matter how small the subsets...
+for j in range(2):
+
+	x_train, y_train_bin = shuffle(x_train, y_train_bin)
+	x_train_sub_list.append([])
+	y_train_sub_list.append([])
+	print('I create void train subset number ',j)
+	
+	x_mini = []
+	y_mini = []
+	for i in range(n_pics_subset):
+		x_mini.append(x_train[i])
+		y_mini.append(y_train_bin[i])
+	
+	x_train_sub_list[j].append(x_mini)
+	y_train_sub_list[j].append(y_mini)
+	
+	x_mini = None
+	del x_mini
+	y_mini = None
+	del y_mini
+	
+	#for i in range(n_pics_subset):
+	#	x_train_sub[j].append(x_train[i])
+	#	y_train_sub[j].append(y_train_bin[i])
+		
+	print('I created train subset number ', j)
+	
+	print("len(x_train_sub[",j,"]) ",len(x_train_sub_list))
+	
+x_train_sub = np.array(x_train_sub_list)
+y_train_sub = np.array(y_train_sub_list)
+
+x_train_sub_list = None
+del x_train_sub_list
+y_train_sub_list = None
+del y_train_sub_list
+
+#print("\nHeap Status After Importing dataset : ")
+#heap_status2 = heap.heap()
+#print("Heap Size : ", heap_status2.size, " bytes\n")
+#print(heap_status2)
+
 ###################################
 #creating a keras dataset
 
-train_dataset = tf.data.Dataset.from_tensor_slices((x_train, y_train))
-test_dataset = tf.data.Dataset.from_tensor_slices((x_test, y_test))
+#train_dataset = tf.data.Dataset.from_tensor_slices((x_train, y_train))
+#test_dataset = tf.data.Dataset.from_tensor_slices((x_test, y_test))
 
-train_dataset = train_dataset.shuffle(10000, reshuffle_each_iteration=False)
-test_dataset = test_dataset.shuffle(2000, reshuffle_each_iteration=False)
+#train_dataset = train_dataset.shuffle(10000, reshuffle_each_iteration=False)
+#test_dataset = test_dataset.shuffle(2000, reshuffle_each_iteration=False)
 
 
-train_datasets = [train_dataset.shard(num_shards=n_learners, index=i) for i in range(n_learners)]
-test_datasets = [test_dataset.shard(num_shards=n_learners, index=i) for i in range(n_learners)]
+#train_datasets = [train_dataset.shard(num_shards=n_learners, index=i) for i in range(n_learners)]
+#test_datasets = [test_dataset.shard(num_shards=n_learners, index=i) for i in range(n_learners)]
 
-train_dataset = train_dataset.batch(1)
-test_dataset = test_dataset.batch(1)
-
-train_dataset = train_dataset.prefetch(tf.data.AUTOTUNE)
-test_dataset = test_dataset.prefetch(tf.data.AUTOTUNE)
+#train_dataset = train_dataset.batch(batch_size)
+#test_dataset = test_dataset.batch(batch_size)
 
 
 #####################################################finish importing an shaping neutrino dataset################
@@ -554,14 +626,21 @@ all_learner_models = []
 for i in range(n_learners):
     all_learner_models.append(KerasLearner(
         model=get_model(),
-        train_loader=train_datasets[i],
-        test_loader=test_datasets[i],
+        train_loader = (x_train_sub[i], y_train_sub[i]),
+        test_loader=(x_test,y_test_bin),
         criterion="categorical_accuracy",
         minimise_criterion=False,
         model_evaluate_kwargs={"steps": vote_batches},
+        #model_fit_kwargs={"steps": vote_batches},
     ))
 
 set_equal_weights(all_learner_models)
+
+
+#print("\nHeap Status Right Before using collective learning : ")
+#heap_status3 = heap.heap()
+#print("Heap Size : ", heap_status3.size, " bytes\n")
+#print(heap_status3)
 
 # Train the model using Collective Learning
 results = Results()

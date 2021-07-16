@@ -34,8 +34,8 @@ class KerasLearner(MachineLearningInterface):
     """
 
     def __init__(self, model: keras.Model,
-                 train_loader: tf.data.Dataset,
-                 test_loader: Optional[tf.data.Dataset] = None,
+                 train_loader,
+                 test_loader = None,
                  minimise_criterion: bool = True,
                  criterion: str = 'loss',
                  model_fit_kwargs: Optional[dict] = None,
@@ -50,8 +50,8 @@ class KerasLearner(MachineLearningInterface):
         :param model_evaluate_kwargs: Arguments to be passed on model.evaluate function call
         """
         self.model: keras.Model = model
-        self.train_loader: tf.data.Dataset = train_loader
-        self.test_loader: Optional[tf.data.Dataset] = test_loader
+        self.train_loader = train_loader
+        self.test_loader = test_loader
         self.minimise_criterion: bool = minimise_criterion
         self.criterion = criterion
         self.model_fit_kwargs = model_fit_kwargs or {}
