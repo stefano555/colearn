@@ -74,15 +74,15 @@ What script does:
 - Does multiple rounds of learning process and displays plot with results
 """
 
-n_learners = 4
+n_learners = 3
 vote_threshold = 0.5
 vote_batches = 2
 
 testing_mode = bool(os.getenv("COLEARN_EXAMPLES_TEST", ""))  # for testing
-n_rounds = 4 if not testing_mode else 1
+n_rounds = 3 if not testing_mode else 1
 #width = 28
 #height = 28
-n_classes = 10
+n_classes = 3
 l_rate = 0.01
 batch_size = 8
 
@@ -493,7 +493,7 @@ del x_test_temp
 from sklearn.utils import shuffle
 
 n_pics_subset=1200
-n_test_subset=600
+n_test_subset=800
 
 x_train_sub_list = []
 y_train_sub_list = []
