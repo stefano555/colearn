@@ -74,16 +74,16 @@ What script does:
 - Does multiple rounds of learning process and displays plot with results
 """
 
-n_learners = 3
+n_learners = 4
 vote_threshold = 0.5
 vote_batches = 2
 
 testing_mode = bool(os.getenv("COLEARN_EXAMPLES_TEST", ""))  # for testing
-n_rounds = 20 if not testing_mode else 1
-width = 28
-height = 28
+n_rounds = 4 if not testing_mode else 1
+#width = 28
+#height = 28
 n_classes = 10
-l_rate = 0.001
+l_rate = 0.01
 batch_size = 8
 
 # Load data for each learner
@@ -492,26 +492,40 @@ del x_test_temp
 
 from sklearn.utils import shuffle
 
-n_pics_subset=1000
+n_pics_subset=1200
+n_test_subset=600
 
 x_train_sub_list = []
 y_train_sub_list = []
-###for some absurde reason it works only with two subsets and breaks with 3, no matter how small the subsets...
+x_test_sub_list = []
+y_test_sub_list = []
 
 
-x_train, y_train_bin = shuffle(x_train, y_train_bin)
+
+#x_train, y_train_bin = shuffle(x_train, y_train_bin)
+x_test, y_test_bin = shuffle(x_test, y_test_bin)
 
 for i in range(n_pics_subset):
 	x_train_sub_list.append(x_train[i])
 	y_train_sub_list.append(y_train_bin[i])
 	
+for j in range(n_test_subset):
+	x_test_sub_list.append(x_test[i])
+	y_test_sub_list.append(y_test_bin[i])
+	
 x_train_sub = np.array(x_train_sub_list)
 y_train_sub = np.array(y_train_sub_list)
+x_test_sub = np.array(x_test_sub_list)
+y_test_sub = np.array(y_test_sub_list)
 
 x_train_sub_list = None
 del x_train_sub_list
 y_train_sub_list = None
 del y_train_sub_list
+x_test_sub_list = None
+del x_test_sub_list
+y_test_sub_list = None
+del y_test_sub_list
 
 
 
@@ -523,11 +537,15 @@ del y_train_sub_list
 ###################################
 #creating a keras dataset
 
+#this first version uses all of the data but uses too much memory
+#train_dataset = tf.data.Dataset.from_tensor_slices((x_train, y_train_bin))
+#test_dataset = tf.data.Dataset.from_tensor_slices((x_test, y_test_bin))
+#this version takes only a subset of the original data
 train_dataset = tf.data.Dataset.from_tensor_slices((x_train_sub, y_train_sub))
-test_dataset = tf.data.Dataset.from_tensor_slices((x_test, y_test_bin))
+test_dataset = tf.data.Dataset.from_tensor_slices((x_test_sub, y_test_sub))
 
 #train_dataset = train_dataset.shuffle(10000, reshuffle_each_iteration=False)
-test_dataset = test_dataset.shuffle(2000, reshuffle_each_iteration=False)
+#test_dataset = test_dataset.shuffle(2000, reshuffle_each_iteration=False)
 
 
 train_datasets = [train_dataset.shard(num_shards=n_learners, index=i) for i in range(n_learners)]
@@ -599,7 +617,7 @@ def get_model():
 	x = Dropout(0.5)(x)
 	predictions = Dense(num_classes, activation= 'softmax')(x)
 	densenet_model = Model(inputs = densenet_model.input, outputs = predictions)
-	adam = Adam(lr=0.000001)
+	adam = Adam(lr=0.0001)#was 0.000001
 	densenet_model.compile(optimizer= adam, loss='categorical_crossentropy', metrics=['categorical_accuracy']) 
 
 	return densenet_model
