@@ -86,25 +86,6 @@ n_classes = 3
 l_rate = 0.01
 batch_size = 8
 
-# Load data for each learner
-#train_dataset, info = tfds.load('mnist', split='train', as_supervised=True, with_info=True)
-#n_datapoints = info.splits['train'].num_examples
-
-#train_datasets = [train_dataset.shard(num_shards=n_learners, index=i) for i in range(n_learners)]
-
-#test_dataset = tfds.load('mnist', split='test', as_supervised=True)
-#test_datasets = [test_dataset.shard(num_shards=n_learners, index=i) for i in range(n_learners)]
-
-
-#for i in range(n_learners):
-#    train_datasets[i] = train_datasets[i].map(
-#        normalize_img, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-#    train_datasets[i] = train_datasets[i].shuffle(n_datapoints // n_learners)
-#    train_datasets[i] = train_datasets[i].batch(batch_size)
-
-#    test_datasets[i] = test_datasets[i].map(
-#        normalize_img, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-#    test_datasets[i] = test_datasets[i].batch(batch_size)
 ########################################################################################
 #import my neutrino dataset
 #this is done in an incredible ugly way but I'll fix that later
@@ -492,17 +473,17 @@ del x_test_temp
 
 from sklearn.utils import shuffle
 
-n_pics_subset=1200
-n_test_subset=800
+n_pics_subset=400
+n_test_subset=300
 
 x_train_sub_list = []
 y_train_sub_list = []
 x_test_sub_list = []
 y_test_sub_list = []
 
+pics_per_shard = n_pics_subset/n_learners
 
-
-#x_train, y_train_bin = shuffle(x_train, y_train_bin)
+x_train, y_train_bin = shuffle(x_train, y_train_bin)
 x_test, y_test_bin = shuffle(x_test, y_test_bin)
 
 for i in range(n_pics_subset):
@@ -527,13 +508,6 @@ del x_test_sub_list
 y_test_sub_list = None
 del y_test_sub_list
 
-
-
-#print("\nHeap Status After Importing dataset : ")
-#heap_status2 = heap.heap()
-#print("Heap Size : ", heap_status2.size, " bytes\n")
-#print(heap_status2)
-
 ###################################
 #creating a keras dataset
 
@@ -544,67 +518,23 @@ del y_test_sub_list
 train_dataset = tf.data.Dataset.from_tensor_slices((x_train_sub, y_train_sub))
 test_dataset = tf.data.Dataset.from_tensor_slices((x_test_sub, y_test_sub))
 
-#train_dataset = train_dataset.shuffle(10000, reshuffle_each_iteration=False)
-#test_dataset = test_dataset.shuffle(2000, reshuffle_each_iteration=False)
-
+train_dataset = train_dataset.shuffle(n_pics_subset, reshuffle_each_iteration=False)
+test_dataset = test_dataset.shuffle(n_test_subset, reshuffle_each_iteration=False)
 
 train_datasets = [train_dataset.shard(num_shards=n_learners, index=i) for i in range(n_learners)]
 test_datasets = [test_dataset.shard(num_shards=n_learners, index=i) for i in range(n_learners)]
 
-train_dataset = train_dataset.batch(batch_size)
-test_dataset = test_dataset.batch(batch_size)
+for i in range(n_learners):
+
+	train_datasets[i] = train_datasets[i].batch(batch_size)
+	test_datasets[i] = test_datasets[i].batch(batch_size)
 
 
-#####################################################finish importing an shaping neutrino dataset################
-#from sklearn.utils import shuffle
 
-#x_train, y_train = shuffle(x_train, y_train)
+#train_dataset = train_dataset.batch(batch_size)
+#test_dataset = test_dataset.batch(batch_size)
 
-#number_pics = 3333
 
-#x_test_a = []
-#x_test_b = []
-#x_test_c = []
-#y_test_a = []
-#y_test_b = []
-#y_test_c = []
-
-#for i in range(number_pics):
-#	x_test_a.append(x_test[i])
-#	y_test_a.append(y_test[i])
-#	x_test_b.append(x_test[i+number_pics])
-#	y_test_b.append(y_test[i+number_pics])	
-#	x_test_c.append(x_test[i+(2*number_pics)])
-#	y_test_c.append(y_test[i+(2*number_pics)])	
-################################################################################
-
-# Define model
-#def get_model():
- #   input_img = tf.keras.Input(
-#        shape=(width, height, 1), name="Input"
-#    )
-#    x = tf.keras.layers.Conv2D(
-#        64, (3, 3), activation="relu", padding="same", name="Conv1_1"
-#    )(input_img)
-#    x = tf.keras.layers.BatchNormalization(name="bn1")(x)
-#    x = tf.keras.layers.MaxPooling2D((2, 2), name="pool1")(x)
-#    x = tf.keras.layers.Conv2D(
-#        128, (3, 3), activation="relu", padding="same", name="Conv2_1"
-#    )(x)
-#    x = tf.keras.layers.BatchNormalization(name="bn4")(x)
-#    x = tf.keras.layers.MaxPooling2D((2, 2), name="pool2")(x)
-#    x = tf.keras.layers.Flatten(name="flatten")(x)
-#    x = tf.keras.layers.Dense(
-#        n_classes, activation="softmax", name="fc1"
-#    )(x)
-#    model = tf.keras.Model(inputs=input_img, outputs=x)
-
- #   opt = tf.keras.optimizers.Adam(lr=l_rate)
- #   model.compile(
- #       loss="sparse_categorical_crossentropy",
- #       metrics=[tf.keras.metrics.SparseCategoricalAccuracy()],
- #       optimizer=opt)
- #   return model
 ####define model densenet-169 
 # One-hot encoding
 
@@ -626,21 +556,16 @@ all_learner_models = []
 for i in range(n_learners):
     all_learner_models.append(KerasLearner(
         model=get_model(),
-        train_loader = train_dataset,
-        test_loader=test_dataset,
+        train_loader = train_datasets[i],
+        test_loader=test_datasets[i],
         criterion="categorical_accuracy",
-        minimise_criterion=False,
+        minimise_criterion=True,
         model_evaluate_kwargs={"steps": vote_batches},
         #model_fit_kwargs={"steps": vote_batches},
     ))
 
 set_equal_weights(all_learner_models)
 
-
-#print("\nHeap Status Right Before using collective learning : ")
-#heap_status3 = heap.heap()
-#print("Heap Size : ", heap_status3.size, " bytes\n")
-#print(heap_status3)
 
 # Train the model using Collective Learning
 results = Results()
