@@ -163,3 +163,7 @@ class ColearnPlot:
         plt.show(block=True)
         # closing the plot makes the figure and axes invalid
         self.fig_invalid = True
+        
+    def savefig(self):
+    	plt.savefig('plot.png')
+    	plt.savefig('plot.pdf')
